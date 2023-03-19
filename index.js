@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
@@ -167,6 +167,35 @@ async function run(){
                 return res.send({accessToken: token});
             }
             res.status(403).send({accessToken: ''});
+        })
+
+        app.put('/users/admin/:id', verifyJWT, async(req, res) => {
+            const decodedEmail = req.decoded.email;
+            const query = {email: decodedEmail}
+            const user = await usersCollection.findOne(query)
+            
+            if(user.role !== 'admin'){
+                return res.status(403).send({message: 'forbidded access'})
+            }
+
+            const id = req.params.id;
+            const filterQuery = {_id: new ObjectId(id)}
+            const options = {upsert: true}
+            const updateDoc = {
+                $set: {
+                    role: 'admin',
+
+                }
+            }
+            const result = await usersCollection.updateOne(filterQuery, updateDoc, options);
+            res.send(result);
+        })
+
+        app.get('/users/admin/:email', async(req, res) => {
+            const email = req.params.email;
+            const query = {email};
+            const user = await usersCollection.findOne(query);
+            res.send({isAdmin: user?.role == 'admin'});
         })
     }
     finally{
