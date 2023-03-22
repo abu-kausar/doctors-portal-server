@@ -38,6 +38,20 @@ async function run(){
         const appointmentOptionCollection = client.db('doctorsPortal').collection('appointmentOptions')
         const bookingsCollection = client.db('doctorsPortal').collection('bookings');
         const usersCollection = client.db('doctorsPortal').collection('users');
+        const doctorsCollection = client.db('doctorsPortal').collection('doctors');
+
+        //middleware
+        // Note: make sure you use verifyAdmin after verifying
+        const verifyAdmin = async(req, res, next) => {
+            const decodedEmail = req.decoded.email;
+            const query = {email: decodedEmail}
+            const user = await usersCollection.findOne(query)
+            
+            if(user?.role !== 'admin'){
+                return res.status(403).send({message: 'forbidded access'})
+            }
+            next();
+        }
 
         // use aggregate to query a multiple collection and then merge data
         app.get('/appointmentOptions', async(req, res) => {
@@ -56,6 +70,12 @@ async function run(){
                 option.slots = remainingSlots;
             })
             res.send(options);
+        })
+
+        app.get('/appointmentSpeciality', async(req, res) => {
+            const query = {}
+            const result = await appointmentOptionCollection.find(query).project({name: 1}).toArray();
+            res.send(result);
         })
 
         // advance method 
@@ -169,15 +189,7 @@ async function run(){
             res.status(403).send({accessToken: ''});
         })
 
-        app.put('/users/admin/:id', verifyJWT, async(req, res) => {
-            const decodedEmail = req.decoded.email;
-            const query = {email: decodedEmail}
-            const user = await usersCollection.findOne(query)
-            
-            if(user.role !== 'admin'){
-                return res.status(403).send({message: 'forbidded access'})
-            }
-
+        app.put('/users/admin/:id', verifyJWT, verifyAdmin, async(req, res) => {
             const id = req.params.id;
             const filterQuery = {_id: new ObjectId(id)}
             const options = {upsert: true}
@@ -196,6 +208,25 @@ async function run(){
             const query = {email};
             const user = await usersCollection.findOne(query);
             res.send({isAdmin: user?.role == 'admin'});
+        })
+
+        app.get('/doctors', verifyJWT, verifyAdmin, async (req, res) => {
+            const query = {};
+            const doctors = await doctorsCollection.find(query).toArray();
+            res.send(doctors);
+        })
+
+        app.post('/doctors', verifyJWT, verifyAdmin, async (req, res) => {
+            const doctor = req.body;
+            const result = await doctorsCollection.insertOne(doctor);
+            res.send(result);
+        })
+
+        app.delete('/doctors/:id', verifyJWT, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const filter = {_id: new ObjectId(id)};
+            const result = await doctorsCollection.deleteOne(filter);
+            res.send(result);
         })
     }
     finally{
